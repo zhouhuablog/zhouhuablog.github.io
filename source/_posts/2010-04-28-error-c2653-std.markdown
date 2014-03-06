@@ -1,0 +1,43 @@
+---
+author: admin
+comments: true
+published: false
+date: 2010-04-28 12:33:48+00:00
+layout: post
+slug: error-c2653-std
+title: 'error C2653: ''std'' : is not a class or namespace name'
+wordpress_id: 286
+categories:
+- 默认
+tags:
+- c2653
+- std
+---
+
+Today, when I created a Win32 Console Application in VS2005, and wrote the code as follow:
+
+#include "stdafx.h"
+
+int _tmain(int argc, _TCHAR* argv[])
+{
+std::string    str = "";
+str += "helllo";
+str += "world";
+
+printf("%s", str);
+return 0;
+}
+
+I got compile errors:
+
+**error C2653: 'std' : is not a class or namespace name**
+
+**...**
+
+At the beginning, I thought it caused by a static library on which my new project depended. Then, I removed the static library dependent, but it didn't work.
+
+As you know, googling is a final solution when you find something you cann't solve. I google it and figure it out. It's simple, as MS has a bug in this situation.
+
+You can find why this happend** [here](http://support.microsoft.com/kb/243444/en-us?fr=1)**, a relational situation about the issue is** [here](http://social.msdn.microsoft.com/Forums/en/Vsexpressvc/thread/bf1b4ebd-a957-4cc3-9ca2-0bae99f41db2)**.
+
+Over!

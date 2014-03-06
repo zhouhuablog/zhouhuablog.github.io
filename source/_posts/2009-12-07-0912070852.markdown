@@ -1,0 +1,100 @@
+---
+author: admin
+comments: true
+date: 2009-12-07 00:52:43+00:00
+layout: post
+slug: 0912070852
+title: Windows中.exe程序的启动过程和C/C++运行时库
+published: false
+wordpress_id: 6
+categories:
+- 默认
+tags:
+- exe程序启动
+- 运行时库
+---
+
+Windows系统中，.exe后缀的文件一般可以双击运行。编程时，编译出来的最终结果一般也表现为一个exe程序和其他的为程序执行提供支持的dll。我们双击一个exe程序的时候，在操作系统层面上，做了些什么使得应用程序能够执行呢？
+
+现在有一个App.exe文件，根据[这篇文章](http://blog.csdn.net/stone_kingnet/archive/2009/06/16/4273369.aspx)的说法，我总结了一下，双击App.exe之后操作系统做的工作如下：
+
+1、 shell调用CreateProcss激活一个App.exe进程。Shell即命令解释器，是操作系统引导时即加载的一个系统进程，在Windows任务管理器里面可以看到一个名为”Explorer.exe”的进程，就是它了。
+
+2、 CreateProcss创建了一个进程内核对象，而系统为该进程创建4GB的虚拟地址空间(在Win2000/WinXP下，每个进程可以有2GB的私有地址空间，剩余的2GB由操作系统占用)用来加载App.exe和其他必要的DLL函数；
+
+3、 CreateProcess加载exe文件，分析文件头(具体格式见PE文件格式分析)以识别文件的运行环境，根据文件头决定由那个环境进行加载操作；
+
+4、 加载App.exe及其必要的DLL文件数据和代码后，CreateProcss即创建主线程，执行C/C++运行时的启动代码，由启动代码执行剩下的过程。
+
+<!-- more -->
+从上面的描述可以看出，一个程序真正调用的第一个应该是C/C++运行时的启动函数。那么C/C++运行时库在程序运行时起到了什么样的作用？下面是关于C/C++运行时的一些学习体会。
+
+什么是C/C++运行时库，网上随便一搜，能得到一大串结果。运行时库是一个library，我们日常编写的程序代码都是运行在这个库上的，运行时库完成了一些底层的基础的工作，例如初始化运行期间的内存单元分配函数，初始化底层I/O例程使用的内存栈，初始化C/C++运行时的全局变量，为C++全局和静态类调用构造函数等等。这样的运行时库使得程序员不必关心过于底层的内容，专注于自己的应用程序逻辑。运行时库还提供一些基础的库函数调用，如memcpy，malloc之类的，更重要的是，运行时库还为应用程序添加启动函数。
+
+Windows环境下，VC提供的 C run-time library又分为动态运行时库和静态运行时库。动态运行时库主要是msvcrt.dll(Debug版：msvcrtd.dll)，对应的库文件是msvcrt.lib(Debug版：msvcrtd.lib)。静态运行时库对应的主要文件是：libc.lib (单线程静态库)和libcmt.lib (多线程静态库)。其中msvcrt.dll提供几千个C函数，包括printf这么低级的函数也在msvcrt.dll中。
+
+应用程序编写完成后进行编译和链接时，编译器根据编译选项(Visual Studio中即为工程设置)，如单线程、多线程或DLL，自动为应用程序链接不同的运行时库的启动函数。在VS2005中，通过下面的操作可以查看或修改选项以决定链接哪个运行时库：
+
+打开工程属性，选择左侧的配置属性---->C/C++---->代码生成，查看【运行时库】，选择不同的运行时库即可。
+
+回到第一个问题，主线程执行C/C++运行时的启动代码，由启动函数调用对应的入口点函数，进入应用程序执行代码逻辑。
+
+不使用宽字节的控制台程序的启动函数为mainCRTStartup。这个函数在VC安装目录下的crt\src\ crt0.c文件中。下面是一个从网上找到的简化版：
+
+void mainCRTStartup(void)
+
+{
+
+int mainret;
+
+/*获得WIN32完整的版本信息*/
+
+_osver = GetVersion();
+
+_winminor = ( _osver >> 8 ) & 0x00FF ;
+
+_winmajor = _osver & 0x00FF ;
+
+_winver = ( _winmajor << 8 ) + _winminor;
+
+_osver = ( _osver >> 16 ) & 0x00FFFF ;
+
+_ioinit(); /* initialize lowio */
+
+/* 获得命令行信息 */
+
+_acmdln = (char *) GetCommandLineA();
+
+/* 获得环境信息 */
+
+_aenvptr = (char *) __crtGetEnvironmentStringsA();
+
+_setargv(); /* 设置命令行参数 */
+
+_setenvp(); /* 设置环境参数 */
+
+_cinit(); /* C数据初始化：全局变量初始化，就在这里！*/
+
+__initenv = _environ;
+
+mainret = main( __argc, __argv, _environ ); /*调用main函数*/
+
+exit( mainret );
+
+}
+
+
+从以上代码可知，运行库在调用用户程序的main或WinMain函数之前，进行了一些初始化工作。初始化完成后，接着才调用了我们自己编写的main或WinMain函数。这样， C/C++运行时库和应用程序就正常地工作起来了。
+
+
+
+
+除了crt0.c外，C运行时库中还包含wcrt0.c、 wincrt0.c、wwincrt0.c三个文件用来提供初始化函数。wcrt0.c是crt0.c的宽字符集版，wincrt0.c中包含 windows应用程序的入口函数，而wwincrt0.c则是wincrt0.c的宽字符集版。
+
+
+
+同样由上面简化版的代码可知，当用户程序的main或WinMain函数执行结束后，返回值被当做参数传入exit函数中，有exit完成程序执行的收尾工作，包括析构C++全局和静态类，调用操作系统的ExitProcess函数，告知进程退出等。
+
+以上是我对于程序执行过程和C/C++运行时库的一点理解，若有错漏，欢迎指正。
+
+2009年11月3日

@@ -1,0 +1,59 @@
+---
+author: admin
+comments: true
+date: 2009-12-30 14:02:06+00:00
+layout: post
+slug: 0912302121
+title: 【编程之美】数组循环移位
+wordpress_id: 126
+categories:
+- 默认
+tags:
+- TopLanguage
+- 编程之美
+---
+
+大概两个星期前看到个题目（还是从[TopLanguage](http://groups.google.com/group/pongba)过去的）：
+
+    
+>设计一个算法，把一个含有N个元素的数组循环右移K位，要求时间复杂度为O（N），且只允许使用两个附加变量。
+
+
+苦思冥想两个星期，今天写了段代码，基本实现“时间复杂度为O（N）”的要求，不过用的变量那就多了...
+下面是我的杰作：
+
+    void mvArray(int *a, int k, int n)
+    {
+    	if (k % n == 0)		return ;
+    	int original = 0, instead = 0;
+    	int	x = n;
+    	instead = a[0];
+    	int target = 0;
+    	int j = 0;
+    	while (x--) {
+    		target = target + k%n&lt; n ? j+k%n : (j+k%n)%n;
+    		instead = a[target];
+    		a[target] = a[j];
+    	}
+    }
+
+假设有`a[]={0,1,2,3,4,5,6,7,8,9}`这样10个元素的数组，要求向右顺移7位。算法从数组的第一个元素开始，a[0]将移动到a[7]，此时a[7]被拿出来，算出a[7]要移动到的目标位，本例中为a[4]，那么a[4]的值被修改为原来a[7]的值，原来的a[4]被拿出来，继续如此循环下去。当目标位的原值与目标位即将被赋予的新值相等时，表示这一个环路已经完成全部的替换。将此次环路的开始位加1，继续下一个环路，直到达到数组元素的个数，跳出循环。此时该数组向右顺移7位的操作已经全部完成。  怎么样，是不是很复杂？连我自己都觉得复杂的不行。可就是写的这么复杂，也只完成题目一半的要求，使用的附加变量远远超过两个。  如果你有兴趣，可以自己试试写个函数出来。懒的写的就直接看下去吧，这里有一个非常优秀的解答。 
+
+    void Reverse(int* arr, int b, int e)
+    {
+        for(; b < e; b++, e--)
+        {
+            int temp = arr[e];
+            arr[e] = arr[b];
+            arr[b] = temp;
+         }
+    }
+    void RightShift(int* arr, int N, int k)
+    {
+         k %= N;
+         Reverse(arr, 0, N - k - 1);
+         Reverse(arr, N - k, N - 1);
+         Reverse(arr, 0, N - 1);
+    }
+
+这两个函数即可完成上面贴的我写的那么长一串代码的所有功能，在线性的时间内实现题中要求的右移操作，只用了1个附加变量。具体的逻辑我这里就不赘述了，直接看[原文](http://msra.cn/Articles/ArticleItem.aspx?Guid=1d6a3d2b-9fe8-4e72-829b-f44f1164b7a5#.)。

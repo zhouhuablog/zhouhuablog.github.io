@@ -1,0 +1,66 @@
+---
+author: admin
+comments: true
+date: 2009-12-13 09:58:42+00:00
+layout: post
+slug: 0912131745
+title: 神奇的shared_ptr
+published: false
+wordpress_id: 34
+categories:
+- 默认
+tags:
+- boost
+- shared_ptr
+- 析构函数
+- 继承
+---
+
+看boost库中的智能指针shared_ptr，发现一段神奇的代码：
+
+class A
+{
+public:
+virtual void sing(){std::cout << "1 2 3 4 5 6 7"<<std::endl; }
+public:
+~A() {std::cout<<"A Destructor is called."<<std::endl;};
+};
+
+class B : public A
+{
+public:
+void sing() {std::cout << "Do re mi fa so la"<<std::endl; }
+
+public:
+~B(){std::cout<<"B Destructor is called."<<std::endl;};
+};
+
+int main(void)
+{
+boost::shared_ptr<A> p(new B());
+p->sing();
+
+}
+
+请注意：代码中，A类的析构函数并没有virtual关键字。下面是输出结果：
+
+Do re mi fa so la
+B Destructor is called.
+A Destructor is called.
+
+神奇的地方出现了，A类的析构函数并不是虚函数，而shared_ptr在退出作用域范围时，却能够正确调用B类的析构函数。同样的代码，把shared_ptr换成scoped_ptr之后，B类的析构函数没有被调用，输出的只有A类析构函数的消息。
+
+我不知道为什么，要探索boost的源码才能搞清楚，先记下来放这里，我找到原因后再来编辑。
+
+
+##### ---------------------------------------------编辑分割线----------------------------------------------
+
+
+
+
+##### 看代码也没研究明白，无意间在网上看到篇文章介绍这个特性，看[这里](http://blog.csdn.net/lfhfut/archive/2009/03/16/3996212.aspx)。
+
+
+**大意：在创建shared_ptr<X>对象时，内部实际上初始化了两个指针，一个是shared_ptr里的px，其值就是原始指针p，另一个是pn，在shared_count中可以看出来，其类型是p的实际类型，也就是说，p的实际类型与shared_ptr的模板参数类型X可以不一样，当然也只能是派生关系，否则也编译不过去。**
+
+**具体情况分析请看上面的链接。**
