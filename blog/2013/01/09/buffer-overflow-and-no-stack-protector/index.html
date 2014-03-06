@@ -1,0 +1,319 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>缓冲区溢出和-fno-stack-protector - Yet Another Coder</title>
+  <meta name="author" content="Zhou Hua">
+
+  
+  <meta name="description" content="缓冲区溢出早在1972年就被发现，直到今天，还有很多程序员中招。用C语言不注意检查数组或者指针边界，一些C标准库里的函数使用不当，都有可能引起缓冲区溢出。 #include &lt;stdio.h&gt;
+char *_gets(char *s)
+{ int c; char *dest = s; &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://zhouhuablog.github.io/blog/2013/01/09/buffer-overflow-and-no-stack-protector">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Yet Another Coder" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Yet Another Coder</a></h1>
+  
+    <h2>Do Not Panic!</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:zhouhuablog.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">缓冲区溢出和-fno-stack-protector</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-01-09T20:49:51+08:00" pubdate data-updated="true">Jan 9<span>th</span>, 2013</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p><a href="http://en.wikipedia.org/wiki/Buffer_overflow">缓冲区溢出</a>早在1972年就被发现，直到今天，还有很多程序员中招。用C语言不注意检查数组或者指针边界，一些C标准库里的函数使用不当，都有可能引起缓冲区溢出。</p>
+
+<pre><code>#include &lt;stdio.h&gt;
+char *_gets(char *s)
+{
+    int c;
+    char *dest = s;
+    int gotchar=0;
+    while ((c = getchar()) != '\n' &amp;&amp; c!= EOF) {
+        *dest++ = c;
+        gotchar = 1;
+    }
+
+    *dest++ = '\0';
+    if (c == EOF &amp;&amp; !gotchar)
+        return NULL;
+    return s;
+}
+
+void echo()
+{
+    char buf[8];
+    _gets(buf);
+    puts(buf);
+}
+</code></pre>
+
+<p>这段代码用库函数<code>getchar()</code>实现另一个库函数<code>gets()</code>，一个存在缓冲区溢出漏洞的版本<code>_gets()</code>，因为它没有办法确定用来保存输入的空间是否足够。如果空间足够小，像<code>echo()</code>里的8个字节，那么任何长度超过7个字符的输入都会导致数组越界。</p>
+
+<pre><code>_echo:
+00000000000000b0    pushq   %rbp
+00000000000000b1    movq    %rsp,%rbp
+00000000000000b4    subq    $0x10,%rsp
+00000000000000b8    leaq    __gets.eh(%rbp),%rax
+00000000000000bc    movq    %rax,%rcx
+00000000000000bf    movq    %rcx,%rdi
+00000000000000c2    movq    %rax,0xf0(%rbp)
+00000000000000c6    callq   __gets
+00000000000000cb    movq    0xf0(%rbp),%rax
+00000000000000cf    movq    %rax,%rdi
+00000000000000d2    callq   _puts
+00000000000000d7    addq    $0x10,%rsp
+00000000000000db    popq    %rbp
+00000000000000dc    ret
+</code></pre>
+
+<p>汇编代码（由i686-apple-darwin11-llvm-gcc-4.2 (GCC) 4.2.1产生）说明了栈的组织方式。</p>
+
+<p><img src="http://farm9.staticflickr.com/8073/8363553547_443c523657.jpg" alt="" /></p>
+
+<p>一旦越界的字符很多，就会破坏调用者中保存的状态，导致程序进入异常状态。</p>
+
+<p>所谓的缓冲区溢出攻击，就是利用这种情况。输入特定的字符串给程序，内容是一些可执行代码的字节编码，让程序执行外部代码，或者覆盖返回地址，让程序跳转到攻击代码，然后，攻击者就可以为所欲为。</p>
+
+<p>缓冲区溢出攻击太过普遍，以致于现代的编译器和操作系统已经实现了一些机制来最小化这种攻击。GCC会尝试加入额外的代码以检测栈是否溢出，选项-fstack-protector说明：</p>
+
+<blockquote><p>-fstack-protector</p>
+
+<p>  Emit extra code to check for buffer overflows, such as stack smashing
+  attacks. This is done by adding a guard variable to functions with
+  vulnerable objects. This includes functions that call alloca, and
+  functions with buffers larger than 8 bytes. The guards are
+  initialized when a function is entered and then checked when the
+  function exits. If a guard check fails, an error message is printed
+  and the program exits.</p></blockquote>
+
+<p>实际上，为了得到上面展示的汇编代码，要使用<code>-fno-stack-protector</code>选项编译源码。这次不用这个选项重新编译。</p>
+
+<pre><code>_echo:
+00000000000000b0    pushq   %rbp
+00000000000000b1    movq    %rsp,%rbp
+00000000000000b4    subq    $0x20,%rsp
+00000000000000b8    movq    ___stack_chk_guard(%rip),%rax //计算canary
+00000000000000bf    movq    (%rax),%rax
+00000000000000c2    movq    %rax,0xf8(%rbp)               //存到栈上，%rbp-8
+00000000000000c6    leaq    0xf0(%rbp),%rax
+00000000000000ca    movq    %rax,%rcx
+00000000000000cd    movq    %rcx,%rdi
+00000000000000d0    movq    %rax,0xe8(%rbp)
+00000000000000d4    callq   __gets
+00000000000000d9    movq    0xe8(%rbp),%rax
+00000000000000dd    movq    %rax,%rdi
+00000000000000e0    callq   _puts
+00000000000000e5    movq    ___stack_chk_guard(%rip),%rax //再次计算canary
+00000000000000ec    movq    (%rax),%rax
+00000000000000ef    movq    0xf8(%rbp),%rcx               //取出栈上的canary
+00000000000000f3    cmpq    %rcx,%rax                     //检查是否有变化
+00000000000000f6    jne     0x000000fe
+00000000000000f8    addq    $0x20,%rsp
+00000000000000fc    popq    %rbp
+00000000000000fd    ret
+0000000000000fe     callq   ___stack_chk_fail              //栈破坏！
+</code></pre>
+
+<p>新的栈结构图</p>
+
+<p><img src="http://farm9.staticflickr.com/8354/8363553569_f3bba35f1e.jpg" alt="" /></p>
+
+<p>这个新的<a href="http://en.wikipedia.org/wiki/Atlantic_Canary#Relationship_with_humans">canary</a>，就是哨兵，由程序运行时随机产生。在从函数返回之前，程序检测这个值以确认栈未被破坏，达到避免攻击的目的。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">admin</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-01-09T20:49:51+08:00" pubdate data-updated="true">Jan 9<span>th</span>, 2013</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/security/'>Security</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://zhouhuablog.github.io/blog/2013/01/09/buffer-overflow-and-no-stack-protector/" data-via="" data-counturl="http://zhouhuablog.github.io/blog/2013/01/09/buffer-overflow-and-no-stack-protector/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2012/11/07/pkg_resources-distributionnotfound/" title="Previous Post: pkg_resources.DistributionNotFound">&laquo; pkg_resources.DistributionNotFound</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2013/03/04/initializer-of-array-and-class/" title="Next Post: 初始化:数组和类">初始化:数组和类 &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/04/initializer-of-array-and-class/">初始化:数组和类</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/buffer-overflow-and-no-stack-protector/">缓冲区溢出和-fno-stack-protector</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/11/07/pkg_resources-distributionnotfound/">pkg_resources.DistributionNotFound</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/05/09/buffering-of-standard-input-output/">标准输入／输出流的缓冲</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/02/17/trap-in-syn-attack-protect/">Win2003Server的SYN Attack Protect陷阱</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - Zhou Hua -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

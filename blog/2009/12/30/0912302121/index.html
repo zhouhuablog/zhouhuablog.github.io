@@ -1,0 +1,261 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>【编程之美】数组循环移位 - Yet Another Coder</title>
+  <meta name="author" content="Zhou Hua">
+
+  
+  <meta name="description" content="大概两个星期前看到个题目（还是从TopLanguage过去的）： 设计一个算法，把一个含有N个元素的数组循环右移K位，要求时间复杂度为O（N），且只允许使用两个附加变量。 苦思冥想两个星期，今天写了段代码，基本实现“时间复杂度为O（N）”的要求，不过用的变量那就多了&hellip;
+下面是我的杰作 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://zhouhuablog.github.io/blog/2009/12/30/0912302121">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Yet Another Coder" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Yet Another Coder</a></h1>
+  
+    <h2>Do Not Panic!</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:zhouhuablog.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">【编程之美】数组循环移位</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2009-12-30T22:02:06+08:00" pubdate data-updated="true">Dec 30<span>th</span>, 2009</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>大概两个星期前看到个题目（还是从<a href="http://groups.google.com/group/pongba">TopLanguage</a>过去的）：</p>
+
+<blockquote><p>设计一个算法，把一个含有N个元素的数组循环右移K位，要求时间复杂度为O（N），且只允许使用两个附加变量。</p></blockquote>
+
+<p>苦思冥想两个星期，今天写了段代码，基本实现“时间复杂度为O（N）”的要求，不过用的变量那就多了&hellip;
+下面是我的杰作：</p>
+
+<pre><code>void mvArray(int *a, int k, int n)
+{
+    if (k % n == 0)     return ;
+    int original = 0, instead = 0;
+    int x = n;
+    instead = a[0];
+    int target = 0;
+    int j = 0;
+    while (x--) {
+        target = target + k%n&amp;lt; n ? j+k%n : (j+k%n)%n;
+        instead = a[target];
+        a[target] = a[j];
+    }
+}
+</code></pre>
+
+<p>假设有<code>a[]={0,1,2,3,4,5,6,7,8,9}</code>这样10个元素的数组，要求向右顺移7位。算法从数组的第一个元素开始，a[0]将移动到a[7]，此时a[7]被拿出来，算出a[7]要移动到的目标位，本例中为a[4]，那么a[4]的值被修改为原来a[7]的值，原来的a[4]被拿出来，继续如此循环下去。当目标位的原值与目标位即将被赋予的新值相等时，表示这一个环路已经完成全部的替换。将此次环路的开始位加1，继续下一个环路，直到达到数组元素的个数，跳出循环。此时该数组向右顺移7位的操作已经全部完成。  怎么样，是不是很复杂？连我自己都觉得复杂的不行。可就是写的这么复杂，也只完成题目一半的要求，使用的附加变量远远超过两个。  如果你有兴趣，可以自己试试写个函数出来。懒的写的就直接看下去吧，这里有一个非常优秀的解答。</p>
+
+<pre><code>void Reverse(int* arr, int b, int e)
+{
+    for(; b &lt; e; b++, e--)
+    {
+        int temp = arr[e];
+        arr[e] = arr[b];
+        arr[b] = temp;
+     }
+}
+void RightShift(int* arr, int N, int k)
+{
+     k %= N;
+     Reverse(arr, 0, N - k - 1);
+     Reverse(arr, N - k, N - 1);
+     Reverse(arr, 0, N - 1);
+}
+</code></pre>
+
+<p>这两个函数即可完成上面贴的我写的那么长一串代码的所有功能，在线性的时间内实现题中要求的右移操作，只用了1个附加变量。具体的逻辑我这里就不赘述了，直接看<a href="http://msra.cn/Articles/ArticleItem.aspx?Guid=1d6a3d2b-9fe8-4e72-829b-f44f1164b7a5#.">原文</a>。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">admin</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2009-12-30T22:02:06+08:00" pubdate data-updated="true">Dec 30<span>th</span>, 2009</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/mo-ren/'>默认</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://zhouhuablog.github.io/blog/2009/12/30/0912302121/" data-via="" data-counturl="http://zhouhuablog.github.io/blog/2009/12/30/0912302121/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+      
+        <a class="basic-alignment right" href="/blog/2010/03/19/keyword-restrict/" title="Next Post: restrict关键字">restrict关键字 &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/04/initializer-of-array-and-class/">初始化:数组和类</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/buffer-overflow-and-no-stack-protector/">缓冲区溢出和-fno-stack-protector</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/11/07/pkg_resources-distributionnotfound/">pkg_resources.DistributionNotFound</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/05/09/buffering-of-standard-input-output/">标准输入／输出流的缓冲</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/02/17/trap-in-syn-attack-protect/">Win2003Server的SYN Attack Protect陷阱</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - Zhou Hua -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

@@ -1,0 +1,395 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: 默认 | Yet Another Coder]]></title>
+  <link href="http://zhouhuablog.github.io/blog/categories/mo-ren/atom.xml" rel="self"/>
+  <link href="http://zhouhuablog.github.io/"/>
+  <updated>2014-03-06T21:12:49+08:00</updated>
+  <id>http://zhouhuablog.github.io/</id>
+  <author>
+    <name><![CDATA[Zhou Hua]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[初始化:数组和类]]></title>
+    <link href="http://zhouhuablog.github.io/blog/2013/03/04/initializer-of-array-and-class/"/>
+    <updated>2013-03-04T16:41:47+08:00</updated>
+    <id>http://zhouhuablog.github.io/blog/2013/03/04/initializer-of-array-and-class</id>
+    <content type="html"><![CDATA[<p>前段时间有个项目，其中有一部分从磁盘读出数据的功能，我们用64块2M内存来保存读出的数据。测试的时候，发现读取速度非常之慢，与理想情况有1个数量级的差距。于是在查错调优的时候，发现了这个问题。</p>
+
+<ul>
+<li><strong>怎么了？</strong></li>
+</ul>
+
+
+<p>2M内存在代码中用<code>typedef</code>一个数组来表示：</p>
+
+<pre><code>const int SIZE_OF_MEM = 2*1024*1024;
+typedef char Block[SIZE_OF_MEM];
+</code></pre>
+
+<p>简化读取逻辑，去掉其他细节之后，得到数据块使用部分的模拟代码：</p>
+
+<pre><code>const int n = 100;
+void *p[n];
+for (int i = 0; i &lt; n; ++i) { // 1
+    p[i] = new Block();
+}
+for (int i = 0; i &lt; 1000000 * n; ++i) { // 2
+    p[i%n] = new(p[i%n]) Block(); //取余以减少测试需要的内存数量
+}
+for (int i = 0; i &lt; n; ++i) {
+    delete p[i];
+}
+return 0;
+</code></pre>
+
+<p>经历数次错误的怀疑/验证，通过对整体逻辑的一步步计时，最后发现中间的第二个<code>for</code>循环里的逻辑就是症结所在。平均每一次的<code>new-placement</code>耗时在毫秒级（milliseconds），大大超出预期，导致读取模型工作效率低下。</p>
+
+<p>看起来数组<code>typedef</code>不灵光，猜测数组可能存在某些特性，导致<code>new-placement</code>运行效率远低于预期。换成类试试看:</p>
+
+<pre><code>const int SIZE_OF_MEM=2*1024*1024;
+class Block
+{
+public:
+    Block() {}
+private:
+    char data[SIZE_OF_MEM];
+};
+</code></pre>
+
+<p>再一次计时，1,000,000次的执行时间不到200ms，看起来正常多了。</p>
+
+<p>这张图对比了测试代码<code>new-placement</code>在<code>block</code>为array和class时的执行效率差异。其中，array由于耗时太久，只执行了1000次，而class执行1,000,000次。
+<img src="http://farm9.staticflickr.com/8235/8526560021_284be2ce3b.jpg" alt="Comparison of Array and Class" /></p>
+
+<p>为什么定义成类比<code>typedef</code>的数组快这么多？看看<code>new-placement</code>语句的汇编代码怎么说（均为VS2008编译）。
+<img src="http://farm9.staticflickr.com/8373/8526560091_79f3c12bdb_b.jpg" alt="VS2008 assembly of array and class" /></p>
+
+<p>汇编代码清楚的显示两种定义的不同。对于数组，在<code>new</code>操作完成后，有<code>memset</code>，而对于类，则有构造函数的调用。对于2M内存，数组类型在<code>new</code>完成后要被初始化为0，这就是低效率的罪魁祸首。</p>
+
+<p>再来看看Linux下gcc的汇编代码：
+<img src="http://farm9.staticflickr.com/8109/8527725118_75cf398054_b.jpg" alt="linux assembly of array and class" />
+GCC和VS2008编译结果一致，看起来应该不是编译器bug，:)</p>
+
+<ul>
+<li>为什么？</li>
+</ul>
+
+
+<p>找找C++标准，关于初始化的部分有这么一条：</p>
+
+<blockquote><p>An object whose initializer is an empty set of parentheses, i.e., (), shall be value-initialized.</p></blockquote>
+
+<p>什么是value-initialized？</p>
+
+<blockquote><p>To value-initialize an object of type T means:</p>
+
+<ul>
+<li><p>if T is a (possibly cv-qualified) class type (Clause 9) with a user-provided constructor (12.1), then the default constructor for T is called (and the initialization is ill-formed if T has no accessible default constructor);</p></li>
+<li><p>if T is a (possibly cv-qualified) non-union class type without a user-provided constructor, then the object is zero-initialized and, if T’s implicitly-declared default constructor is non-trivial, that constructor is called.</p></li>
+<li><p>if T is an array type, then each element is value-initialized;</p></li>
+<li><p>otherwise, the object is zero-initialized.</p></li>
+</ul>
+</blockquote>
+
+<p>这种空的小括号，()，一般情况下不能用来表示初始化某个对象。但是，在少数情况下，它是合法的，上面的<code>new</code>就属于这些少数情况里的一个。在这种情况下，要初始化的类型又是数组，于是不幸落入第三种情况，每个元素都被初始化为0。Linux下的汇编代码清楚的表明了这个过程：</p>
+
+<pre><code>0x000000000044187c cmpq   $0x0,-0x18(%rbp)
+0x0000000000441881 je     0x4418b9
+0x0000000000441883 mov    -0x18(%rbp),%rax
+0x0000000000441887 mov    %rax,%rsi
+0x000000000044188a mov    $0x200000,%edi
+0x000000000044188f callq  0x43d853 
+0x0000000000441894 mov    %rax,%rdx
+0x0000000000441897 test   %rdx,%rdx
+0x000000000044189a je     0x4418b9
+0x000000000044189c mov    $0x1fffff,%edx               //数组大小
+0x00000000004418a1 jmp    0x4418ae
+0x00000000004418a3 movb   $0x0,(%rax)               // 置0
+0x00000000004418a6 add    $0x1,%rax                   //移动指针
+0x00000000004418aa sub    $0x1,%rdx                   //数组大小减1
+0x00000000004418ae cmp    $0xffffffffffffffff,%rdx    //判断是否完成全部元素置0
+0x00000000004418b2 setne  %cl
+0x00000000004418b5 test   %cl,%cl
+0x00000000004418b7 jne    0x4418a3
+0x00000000004418b9 mov    -0x18(%rbp),%rax
+</code></pre>
+
+<p>不同的初始化方式编译得到的汇编代码差异很大，如果在<code>new-placement</code>之后不写()，结果又如何？不同的优化等级会有影响么？有兴趣的可以查查标准，再自己动手试试。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[pkg_resources.DistributionNotFound]]></title>
+    <link href="http://zhouhuablog.github.io/blog/2012/11/07/pkg_resources-distributionnotfound/"/>
+    <updated>2012-11-07T20:54:23+08:00</updated>
+    <id>http://zhouhuablog.github.io/blog/2012/11/07/pkg_resources-distributionnotfound</id>
+    <content type="html"><![CDATA[<p>前段时间升级到Mountain Lion，之后很久没写过Python。昨天准备折腾一下才发现，我的Python竟然不工作了。python &mdash;version有输出，但pip报错：</p>
+
+<pre><code>$ pip --version
+Traceback (most recent call last):
+File "/usr/local/bin/pip", line 5, in &lt;module&gt;
+from pkg_resources import load_entry_point
+File "/Library/Python/2.7/site-packages/distribute-0.6.30-py2.7.egg/pkg_resources.py", line 2807, in &lt;module&gt;
+working_set.require(__requires__)
+File "/Library/Python/2.7/site-packages/distribute-0.6.30-py2.7.egg/pkg_resources.py", line 690, in require
+needed = self.resolve(parse_requirements(requirements))
+File "/Library/Python/2.7/site-packages/distribute-0.6.30-py2.7.egg/pkg_resources.py", line 588, in resolve
+raise DistributionNotFound(req)
+pkg_resources.DistributionNotFound: pip==1.0.2
+</code></pre>
+
+<p>google了一晚上找到了解决方案</p>
+
+<ul>
+<li><p>在python的<a href="http://pypi.python.org/pypi/setuptools">setuptools页面</a>下载对应版本的Python</p></li>
+<li><p>打开终端，运行：</p>
+
+<blockquote><p><code>sh ./setuptools-0.6c11-py2.7.egg</code></p></blockquote></li>
+<li><p>完成之后运行：</p>
+
+<blockquote><p><code>easy_install -U pip</code></p></blockquote></li>
+</ul>
+
+
+<p>这个问题似乎是因为ML升级了Python，却没有做附带的升级site-packages工作。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[标准输入／输出流的缓冲]]></title>
+    <link href="http://zhouhuablog.github.io/blog/2011/05/09/buffering-of-standard-input-output/"/>
+    <updated>2011-05-09T22:30:39+08:00</updated>
+    <id>http://zhouhuablog.github.io/blog/2011/05/09/buffering-of-standard-input-output</id>
+    <content type="html"><![CDATA[<p>本文内容大部分内容来自《<a href="http://book.douban.com/subject/1788421/">Advanced Programming in the UNIX Environment</a>》第5章第4节 Buffering。</p>
+
+<p>题目：</p>
+
+<blockquote><p>下面的代码输出结果是什么？</p>
+
+<pre><code>class A
+{
+    private:
+        int m_value;
+    public:
+        A(int value)
+        {
+            m_value = value;
+        }
+        void Print1()
+        {
+            printf("hello world");
+        }
+        void Print2()
+        {
+            printf("%d", m_value);
+        }
+};
+
+int main(void)
+{
+    A* pA = NULL;
+    pA-&gt;Print1();
+    pA-&gt;Print2();
+
+    return 0;
+}
+</code></pre></blockquote>
+
+<p>显然应该是，能正常执行<code>Print1()</code>而不能执行<code>Print2()</code>，也就是说，在程序崩溃之前至少应该能输出<code>“hello world”</code>。原因看<a href="http://blog.developnotes.info/2009/12/22/0912222006/">这里</a></p>
+
+<p>等一等，你可能会拷贝下来去编译执行一次，如果跟我一样在Mac下的话，你可能会发现不对劲的地方－为什么看不到<code>Print1()</code>的输出呢？为了确认答案，拷贝题目代码执行的结果中没有Print1()的输出，直接看到<code>Print2()</code>引用非法地址导致的错误：</p>
+
+<pre><code>Segmentation fault
+</code></pre>
+
+<p>那这是什么原因呢？</p>
+
+<p><code>printf</code>函数定义：</p>
+
+<pre><code>int  printf(const char * __restrict, ...)
+</code></pre>
+
+<p>它属于标准I/O库，标准I/O库提供了对输入输出的缓存以达到调用read和write次数最少的目的。嗯哼，“缓冲”是关键词，猜测Print1()的输出应该是被缓冲了吧。可具体是怎么缓冲的呢？</p>
+
+<p>标准I/O库通过提供缓冲区，减少对于无缓冲的read和write方法的调用，增加效率。另一方面，缓冲区的存在也使得应用程序不用自己考虑最佳的读写块大小。不过，如上所见，缓冲区既是标准I/O库的便利之处，同时也是容易引起混乱的地方。标准I/O库提供三种缓冲方式：</p>
+
+<ol>
+<li><p> 完全缓冲，此种情形下，所有的I/O操作都在缓冲区被填满后才真正的发生；</p></li>
+<li><p> 行缓冲，只有当碰到换行符时才发生真正的I/O操作；</p></li>
+<li><p> 无缓冲，顾名思义，标准I/O库对I/O操作不做缓存。</p></li>
+</ol>
+
+
+<p>ISO C对standard input、standard output以及standard error有以下规定：</p>
+
+<ul>
+<li><p>当且仅当不指向交互设备时，standard input和standard output是完全缓冲的</p></li>
+<li><p>Standard error不允许完全缓冲</p></li>
+</ul>
+
+
+<p>这个模糊不清的标准根本没说实现的时候具体应该怎么做，当standard input指向交互设备时，它应该无缓冲还是行缓冲？Standard error不允许完全缓冲，那么实现的时候采用行缓冲还是无缓冲呢？大多数的实现遵循以下原则：</p>
+
+<ul>
+<li><p>Standard error总是实现为无缓冲流；</p></li>
+<li><p>除了standard error之外的其他流，倘若指向终端设备，则采取行缓冲。否则全部采用完全缓冲；</p></li>
+</ul>
+
+
+<p>对默认的缓冲方式不满意的话，可以通过</p>
+
+<pre><code>void setbuf(FILE * __restrict, char * __restrict);
+int  setvbuf(FILE * __restrict, char * __restrict, int, size_t);
+</code></pre>
+
+<p>两个函数更改缓冲区大小以及类型。</p>
+
+<p>好了，既然知道内幕，现在修改main函数，把缓冲区设置成空试试</p>
+
+<pre><code>int main(void)
+{
+    setbuf(stdout, NULL);
+
+    A* pA = NULL;
+    pA-&gt;Print1();
+    pA-&gt;Print2();
+
+    return 0;
+}
+</code></pre>
+
+<p>再执行，这次<code>Print1()</code>的输出能够正常显示。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[Win2003Server的SYN Attack Protect陷阱]]></title>
+    <link href="http://zhouhuablog.github.io/blog/2011/02/17/trap-in-syn-attack-protect/"/>
+    <updated>2011-02-17T11:11:06+08:00</updated>
+    <id>http://zhouhuablog.github.io/blog/2011/02/17/trap-in-syn-attack-protect</id>
+    <content type="html"><![CDATA[<p>发现这个陷阱源于一个自己写的HTTP服务端。因为项目里要用到支持GET请求就能满足需要的HTTP服务端，图方便就用内部封的异步Socket类实现了这么个简单的服务端。没想到，就是这个简单的HTTP服务，还是出现了几次莫名其妙的问题。第一次出现在刚完成代码功能测试时，对HTTP的一知半解导致查了几天之后才发现原来是没处理HTTP头里的Keep-Alive。</p>
+
+<p>最近又碰见另一个百思不得其解铃还需系铃人人得而诛之的问题，测试服务端性能时，用Apache的AB压服务器，设置的并发数稍大就只能完成一部分请求，AB的提示是“远程主机主动关闭连接”。具体来说就是，当AB参数为请求数1000，并发数200的时候，服务端能够正常完成测试；增加并发数到300，则服务端只能完成1000个请求中的300多个，客户端抓包观察到大量请求在TCP三次握手完成后立刻被RST。</p>
+
+<p>用自己封装的异步Socket类写个测试客户端，循环连接服务端，产生大量连接，同样连接数也只能到300多个，其余的大量连接得到类型为WSAENETRESET的socket错误。</p>
+
+<p>用来实现HTTP服务端的异步Socket类没有什么特别操作。逻辑是这样的：</p>
+
+<ul>
+<li><p>服务端首先产生一个Socket句柄（废话&hellip;），转为异步模式后监听端口，等待客户端连接。</p></li>
+<li><p>一旦有客户端连接，服务端调用accept得到新的Socket，加入到一个Socket集合进行统一处理。</p></li>
+<li><p>每次统一处理时，查询所有Socket的事件，对不同的事件进行不同的处理。</p></li>
+<li><p>服务端对所有的Socket句柄不主动执行关闭操作，除非调用recv时得到的长度为0，即认为是客户端主动关闭，随后服务端进入被动关闭。</p></li>
+</ul>
+
+
+<p>应用开发出现问题的第一反应是检查自己的程序。首先怀疑是逻辑不严密，在某特殊情况下Reset客户端连接。在服务端每个可能关闭socket的地方增加日志，再用AB压一次观察输出。但服务端日志没有记录到任何异常的关闭操作，问题似乎不是服务端关闭连接导致的。</p>
+
+<p>既然没有异常关闭socket的情况，那应该是其他地方出问题。考虑listen函数的backlog参数，会不会是这里的原因呢？</p>
+
+<p>listen函数原型：</p>
+
+<pre><code>int listen( __in  SOCKET s,  __in  int backlog );
+</code></pre>
+
+<p>来看backlog参数在MSDN的说明</p>
+
+<blockquote><p>The maximum length of the queue of pending connections</p></blockquote>
+
+<p>再往下看，MSDN中对listen函数有一段这样的描述</p>
+
+<blockquote><p>If a connection request arrives and the queue is full, the client will receive an error with an indication of WSAECONNREFUSED.</p></blockquote>
+
+<p>就是说，如果客户端连接数过大，超过调用listen函数设置的backlog队列大小，新的连接会收到WSAECONNREFUSED的socket错误。但观察到的现象是客户端socket错误为WSAENETRESET，不符合文档的描述。</p>
+
+<p>过了listen函数再往下看，代码进入日志能够记录的范围。上面说过，服务端没有异常关闭的操作。到这里仍然没找到原因。目前为止，最有可能的情况就是瞬间的连接数过多导致backlog满。就算是这个原因，客户端收到的也应该是WSAECONNREFUSED错误而不是观察到的WSAENETRESET错误，绕进死胡同了。就这个问题在<a href="http://stackoverflow.com/">stackoverflow</a>发的询问帖，回复里也有人说可能是backlog满导致客户端无法连接，但却无法解释为什么收到的socket错误不是MSDN描述的WSAECONNREFUSED。</p>
+
+<p>问题就这样被搁置下来，直到三天后我忙完手头的事情，用部分关键词google，得到了某个错误现象匹配度很高的搜索结果。<a href="http://www.tech-archive.net/Archive/Development/microsoft.public.win32.programmer.networks/2005-10/msg00313.html">这里</a>是原帖，截取一段简单描述</p>
+
+<blockquote><p>We started getting problems when customers implemented SP1 on their Windows Server 2003
+boxes. We&rsquo;d see clients who thought they had successfully connected, but who would get a
+RESET back from the server immediately after the 3-way handshake (SYN, SYN-ACK, ACK). This
+seems <em>completely broken</em> to me.</p></blockquote>
+
+<p>啊哈，跟我们的问题看起来一样！他认为是Windows 2003 Server默认开启的<a href="http://technet.microsoft.com/en-us/library/cc781167(WS.10">SYN攻击保护</a>.aspx)开关在作怪，猜想可能是SYN攻击保护机制的实现影响到Winsock的accept函数行为。正常的行为是，当backlog队列满时，三次握手中第一个SYN包就会导致服务端响应RST+ACK拒绝客户端的连接。但SYN保护机制起作用后，这个行为变成直接接受新的连接再去检查backlog队列，当发现backlog队列满时丢弃此连接。服务端此时要干掉连接就只能在已完成三次握手的连接上发送一个RST，于是客户端出现莫名其妙的WSAENETRESET错误。</p>
+
+<p>这是他的问题以及猜测，能不能解决我们的问题，还要实验一下。打开注册表才发现，我们的服务器上没有他描述的HKLM\System\CurrentControlSet\Services\Tcpip\Parameters\SynAttackProtect这一项，没关系，没有我们可以创造一个，设置键值为0，重启机器（万恶的重启！）。此时再用AB去压服务端，在客户端果然抓到的RST+ACK包。用自己写的客户端测试，socket错误也由之前百思不得其解的WSAENETRESET变成WSAECONNREFUSED。</p>
+
+<p>问题原因到这里基本确认，由于我们的服务端实现在接受客户端连接时速度不够快，用AB压服务端时的大量连接填满backlog队列，这些连接同时也触发服务器默认开启的SYN攻击保护机制，操作系统认为受到SYN攻击，后续的其他连接于是被重置。关于这个问题，<a href="http://blogs.msdn.com/b/wndp/archive/2005/12/09/502256.aspx">这里</a>也有提及。这种跟文档描述不一致的行为害苦了广大程序员，在别人2005年就受过苦之后，2010年我这个倒霉蛋又再次遇上。不过奇怪的是，网上搜索不到多少关于这个问题的中文资料，英文倒是又不少人提过。</p>
+
+<p>之前在跟项目组同事的讨论原因时，也考虑过系统或者路由在应用程序之下断开连接的可能性，但是由于对操作系统环境不熟悉，不知道存在这么一个SynAttackProtect机制，影响到问题原因的确认，算是一个教训吧。虽然存在文档描述与实际行为不一致的原因，但对程序运行平台的熟悉程度还是直接影响了定位问题的速度。</p>
+
+<p>顺便说一句，测试中发现，Windows 2003 Server SP2里的backlog最大值似乎是200，不过没有查过官方文档确认，纯属推测。</p>
+]]></content>
+  </entry>
+  
+  <entry>
+    <title type="html"><![CDATA[C++ Exception Handling]]></title>
+    <link href="http://zhouhuablog.github.io/blog/2010/06/09/cpp-exception-handling/"/>
+    <updated>2010-06-09T20:59:07+08:00</updated>
+    <id>http://zhouhuablog.github.io/blog/2010/06/09/cpp-exception-handling</id>
+    <content type="html"><![CDATA[<p>最近刚刚读完《深度探索C++对象模型》，说来惭愧，整本书都快看完才想起来要做笔记。目前笔记只有后面三章的一些重点内容，本文是异常处理(Exception Handling)这部分内容的笔记整理。</p>
+
+<p>写程序的时候，对于可能出现异常的地方，通常来说我们是这样写的：</p>
+
+<pre><code>try{
+...
+throw ...
+} catch(...) {
+//exception handling
+}
+</code></pre>
+
+<p>当异常发生时，代码跳转到catch块，完成异常处理后退出。为了支持这个处理流程，编译器要能够在发生异常时，找到对应的catch子句。而查找catch子句时，编译器要知道函数的当前作用范围，同时还要了解抛出异常的类型，以便进行catch子句匹配(这引出了执行期类型识别的需求，即RTTI)。</p>
+
+<p>详细来看看，上面这段代码大致可以分为三个部分：</p>
+
+<ul>
+<li><p><code>throw</code>子句，它抛出一个<code>exception</code>，可以是内置类型，也可以是用户自定义类型</p></li>
+<li><p><code>catch</code>子句，每个<code>catch</code>子句都是一个<code>exception handler</code>，表示其之后的代码段用来处理某种类型的exception</p></li>
+<li><p><code>try</code>段，内含一些程序代码，这些代码可能引发<code>catch</code>子句生效</p></li>
+</ul>
+
+
+<p>当一个<code>exception</code>被抛出时，程序控制权从函数中释放，转而寻找一个匹配的<code>catch</code>子句。若不存在匹配的<code>catch</code>，默认的<code>terminate()</code>方法将被调用。而在控制权被放弃后，堆栈中的函数被poped up，函数内局部对象的析构函数在poped up之前会被调用。</p>
+
+<p>当exception发生，编译系统完成下面几件必须要做的事：</p>
+
+<p>1、检查发生<code>throw exception</code>操作的函数</p>
+
+<p>2、决定<code>throw</code>是否是发生在一个try段内</p>
+
+<p>3、如果throw发生在try段内，编译系统开始比较发生的exception的类型和catch子句中exception的类型是否吻合</p>
+
+<p>4、一旦exception类型吻合，该catch子句就得到流程控制权</p>
+
+<p>5、若throw并不是发生在try段内，或者没有找到吻合的catch子句，系统要做的就是，清理当前函数范围内所有局部对象，从堆栈中pop up当前函数，进入堆栈内下一个函数，继续步骤2-5</p>
+
+<p>那么当一个exception被抛出后，它经历了些什么？它并没有无家可归，睡在天桥底下。抛出的exception object放在exception数据堆栈中，从throw处传递到catch子句的是这个exception object的地址。来看个例子：</p>
+
+<pre><code>catch (BaseException  newobj) {
+    //do something
+    throw ;
+}
+</code></pre>
+
+<p>假设这个catch子句将收到一个<code>DerivedException</code>类型的exception object，<code>DerivedException</code>继承自<code>BaseException</code>。那么，由于exception类型吻合，按照上面说的步骤4，这个catch子句得到控制权。</p>
+
+<p>catch子句中的newobj在收到exception时，将以抛出的exception object作为初值，像函数以传值方式传递参数一样。由于newobj是一个对象而不是指针或引用，BaseException的copy constructor将会被调用(如果存在的话)，以拷贝原始exception object中属于BaseException的部分到当前的newobj中。</p>
+
+<p>完成这些之后，catch子句内的代码被执行，再次抛出异常。这次抛出的是newobj还是原始的exception object？抛出的仍然是原始的exception object。newobj只是局部对象，在catch子句结束后被摧毁，任何对newobj的修改都被丢弃而不会影响到原始的exception object。这个原始的exception object将直到有一个catch子句执行完，并且不再抛出exception后，才会被摧毁。</p>
+
+<p>本文内容来自《深度探索C++对象模型》第7章中的异常处理介绍。</p>
+
+<p>关于C++的EH，在codeproject上有篇<a href="http://www.codeproject.com/KB/cpp/Win32Exceptions.aspx">文章</a>简单介绍编译系统与win32系统之间的协作关系。</p>
+
+<p>that&rsquo;s all, over！</p>
+]]></content>
+  </entry>
+  
+</feed>

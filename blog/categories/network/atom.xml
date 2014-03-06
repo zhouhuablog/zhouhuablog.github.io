@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+  <title><![CDATA[Category: Network | Yet Another Coder]]></title>
+  <link href="http://zhouhuablog.github.io/blog/categories/network/atom.xml" rel="self"/>
+  <link href="http://zhouhuablog.github.io/"/>
+  <updated>2014-03-06T21:12:49+08:00</updated>
+  <id>http://zhouhuablog.github.io/</id>
+  <author>
+    <name><![CDATA[Zhou Hua]]></name>
+    
+  </author>
+  <generator uri="http://octopress.org/">Octopress</generator>
+
+  
+  <entry>
+    <title type="html"><![CDATA[Nagle算法和魔兽世界的延迟]]></title>
+    <link href="http://zhouhuablog.github.io/blog/2010/10/17/nagle-algorithm-and-lag-in-wow/"/>
+    <updated>2010-10-17T18:28:33+08:00</updated>
+    <id>http://zhouhuablog.github.io/blog/2010/10/17/nagle-algorithm-and-lag-in-wow</id>
+    <content type="html"><![CDATA[<p>暴雪大神的《魔兽世界》从2005年4月26号公测到现在，风靡全球已有好几个春秋。还记得公测时小白一个的我打哀嚎被副本里的一个要一点点技术跳过去的平台折腾疯，无数次的跳到空中，眼看着那个台子在眼前越升越高，然后环顾四周，全是怪，挂，跑尸，复活，找路，再跳，挂&hellip;以至于我满级之后都不敢去哀嚎 : (</p>
+
+<p>当然，玩了几年的wow，要说印象最深刻的嘛，当然要数游戏代理公司的小霸王服务器，以及小霸王那无敌的延迟（你肯定也这么想，哈）。曾经有一次，参加工会的BWL开荒，2号小红龙，只要开荒过这个怪的玩家，我相信你绝对不会忘记它的变态。那次开荒，变态的BOSS配合几百的延迟让全团一次次的扑地，直到身上的装备跟延迟变成一个颜色，还是没过，丧气解散，杯具！</p>
+
+<p>不论是以前的九城时代，还是现在的网易时代，lag一直都是wow最大的问题，当然，大家普遍认为主要的原因在于服务器质量不靠谱，故有“小霸王”之名。但同时也要了解，暴雪一直在调整程序，以期粉丝们有更好的游戏体验。在TBC 2.3.2版本的<a href="http://www.warcraftchina.com/info/patch/84553.html">patch说明</a>中，就有如下与游戏体验相关的内容：</p>
+
+<blockquote><p>综合
+* <del>/timetest命令可显示游戏性能信息。输入/timetest 0可关闭该命令。开启此命令后，系统将在玩家下一次在飞行管理员处搭乘飞行坐骑时进行性能测试，并在着陆后显示结果数据。</del>
+* <del>微缩地图将不再显示带蓝色问号的任务NPC位置。</del>
+* <del>受到爆击后触发的效果：许多技能和天赋在2.3.0中作了改变，可以在玩家处于坐下状态时正常发挥因受到爆击而触发的效果。</del>
+* <del>当玩家完成了NPC给予的任务后，鼠标指向该NPC时将显示为问号，而不再是感叹号。</del>
+* <del>取消了公会银行的管理权限对公会会长的等级要求。公会会长将始终拥有对公会银行的完整管理权限，且此完整权限不可改变。</del>
+* <del>在公会银行的管理中新增了“提款：仅限于维修”功能。当公会将某层级的公会成员权限设定为此时，此阶层的成员将不能从公会银行直接提款，而只能用每天的提款额度进行直接修理。</del>
+* <del>玩家在受到攻击时将自动站起，即使该次攻击未能命中。</del>
+* <del>船只和飞艇上的乘务NPC又可以正常工作了。</del>
+* <strong>通过禁用Nagle算法降低了网络延迟。 </strong></p></blockquote>
+
+<p>首先赞一下暴雪的产品态度，如果我们公司也一直致力于提高客户的使用体验，就算不能到暴雪这种程度，最起码也应该会有很好的口碑和用户忠诚度。好了，马屁拍完来研究一下这句“<strong>通过禁用Nagle算法降低了网络延迟 </strong>”。
+开始blabla之前，我先说说网络延迟的概念。不知道在其他领域是是不是有别的含义，但在我们游戏界（什么时候我算游戏界的了？-_&ndash;|||），特别是在魔兽世界，延迟指的就是痛苦，就是被别人打而无还手之力，就是剩下一滴血的时候用不了血瓶，用不了消失，用不了冰箱，It means hell！对不起，我又变态，哦，不，失态了。
+正经的说，延迟在游戏中最典型最恶心的表现是，当你打算使用某个技能，游戏角色要在你按了键盘或点了鼠标后的一段时间内才能发出技能。如果你按了一系列技能的快捷键后游戏人物一点反应没有，而是要等到你倒了杯水回来的时候才突然像快进一样做出N多动作，那么恭喜你，网络延迟非常高，你的游戏人物应该大多数情况下会躺在地板上数星星。</p>
+
+<p>那么这个Nagle算法是什么万恶的东东，会增加网络延迟？而且暴雪大神竟然一直到TBC才想起来关掉这玩意儿，不给力阿！话说，在很久很久以前&hellip;好吧好吧，别嘘。所谓<a href="http://en.wikipedia.org/wiki/Nagle%27s_algorithm">Nagle算法</a>，它是个根据一定的规则减少网络发送包数量的方法，进而改善了TCP/IP网络的效率。关于这个算法，<a href="http://book.douban.com/subject/1088054/">《TCP/IP详解》</a>里是这样说的</p>
+
+<blockquote><p>该算法要求一个TCP连接上最多只能有一个未被确认的未完成的小分组，在该分组的确认到达之前不能发送其他的小分组。相反，TCP收集这些少量的分组，并在确认到来时以一个分组的方式发出去。</p></blockquote>
+
+<p>在魔兽世界游戏里，我们的操作中有相当一部分的数据量是极小的，若没有Nagle算法，1个字节的数据可能也会被作为一个分组发送出去，考虑到TCP头有20字节，IP头也有20个字节，为了发送1个字节的数据产生的分组就达到41字节。这是一种极大的浪费，更为重要的是，这同时也增加了分组的数量，给客户端网络造成压力，我想这应该正是暴雪当初没关闭Nagle算法的原因。</p>
+
+<p>2.3.2里的这条patch有什么神奇的作用到这已经水落石出，如果没有关闭Nagle算法，客户端的数据包可能由于数据量太小而被TCP层缓存下来，等到上一个分组的确认收到后才把所缓存的所有数据发送到服务端，从而导致客户端感觉延迟有所增加。关闭Nagle算法后，每个数据包在TCP层便不会被缓存，直接发送到服务端，改善客户端游戏体验的目的也就达到了。</p>
+
+<p>其实在其他领域对Nagle算法“意见”也是很大的，比如实时性要求很高的应用，远程桌面之类的，像鼠标移动之类的小消息必须无延迟发送出去，否则客户用起来会抓狂，后果很严重！<a href="http://www.rfc-editor.org/rfc/rfc1122.txt">Host Requirements RFC</a>针对TCP的Nagle算法实现这样说的</p>
+
+<blockquote><p>A TCP SHOULD implement the Nagle Algorithm [TCP:9] to coalesce short segments.  However, there MUST be a way for
+an application to disable the Nagle algorithm on an individual connection.</p></blockquote>
+
+<p>简言之，TCP必须实现Nagle算法，但同时也要提供方法能够在某个连接上关闭此算法。</p>
+
+<p>Socket用户可以通过TCP_NODELAY选项来关闭Nagle算法，这个选项在netinet/tcp.h文件中定义。</p>
+
+<p>over~</p>
+]]></content>
+  </entry>
+  
+</feed>

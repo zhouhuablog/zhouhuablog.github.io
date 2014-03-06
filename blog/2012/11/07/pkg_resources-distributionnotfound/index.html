@@ -1,0 +1,248 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>pkg_resources.DistributionNotFound - Yet Another Coder</title>
+  <meta name="author" content="Zhou Hua">
+
+  
+  <meta name="description" content="前段时间升级到Mountain Lion，之后很久没写过Python。昨天准备折腾一下才发现，我的Python竟然不工作了。python &mdash;version有输出，但pip报错： $ pip --version
+Traceback (most recent call last): &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://zhouhuablog.github.io/blog/2012/11/07/pkg_resources-distributionnotfound">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Yet Another Coder" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Yet Another Coder</a></h1>
+  
+    <h2>Do Not Panic!</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:zhouhuablog.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">pkg_resources.DistributionNotFound</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-11-07T20:54:23+08:00" pubdate data-updated="true">Nov 7<span>th</span>, 2012</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>前段时间升级到Mountain Lion，之后很久没写过Python。昨天准备折腾一下才发现，我的Python竟然不工作了。python &mdash;version有输出，但pip报错：</p>
+
+<pre><code>$ pip --version
+Traceback (most recent call last):
+File "/usr/local/bin/pip", line 5, in &lt;module&gt;
+from pkg_resources import load_entry_point
+File "/Library/Python/2.7/site-packages/distribute-0.6.30-py2.7.egg/pkg_resources.py", line 2807, in &lt;module&gt;
+working_set.require(__requires__)
+File "/Library/Python/2.7/site-packages/distribute-0.6.30-py2.7.egg/pkg_resources.py", line 690, in require
+needed = self.resolve(parse_requirements(requirements))
+File "/Library/Python/2.7/site-packages/distribute-0.6.30-py2.7.egg/pkg_resources.py", line 588, in resolve
+raise DistributionNotFound(req)
+pkg_resources.DistributionNotFound: pip==1.0.2
+</code></pre>
+
+<p>google了一晚上找到了解决方案</p>
+
+<ul>
+<li><p>在python的<a href="http://pypi.python.org/pypi/setuptools">setuptools页面</a>下载对应版本的Python</p></li>
+<li><p>打开终端，运行：</p>
+
+<blockquote><p><code>sh ./setuptools-0.6c11-py2.7.egg</code></p></blockquote></li>
+<li><p>完成之后运行：</p>
+
+<blockquote><p><code>easy_install -U pip</code></p></blockquote></li>
+</ul>
+
+
+<p>这个问题似乎是因为ML升级了Python，却没有做附带的升级site-packages工作。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">admin</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2012-11-07T20:54:23+08:00" pubdate data-updated="true">Nov 7<span>th</span>, 2012</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/mo-ren/'>默认</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://zhouhuablog.github.io/blog/2012/11/07/pkg_resources-distributionnotfound/" data-via="" data-counturl="http://zhouhuablog.github.io/blog/2012/11/07/pkg_resources-distributionnotfound/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2011/05/09/buffering-of-standard-input-output/" title="Previous Post: 标准输入／输出流的缓冲">&laquo; 标准输入／输出流的缓冲</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2013/01/09/buffer-overflow-and-no-stack-protector/" title="Next Post: 缓冲区溢出和-fno-stack-protector">缓冲区溢出和-fno-stack-protector &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/04/initializer-of-array-and-class/">初始化:数组和类</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/buffer-overflow-and-no-stack-protector/">缓冲区溢出和-fno-stack-protector</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/11/07/pkg_resources-distributionnotfound/">pkg_resources.DistributionNotFound</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/05/09/buffering-of-standard-input-output/">标准输入／输出流的缓冲</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/02/17/trap-in-syn-attack-protect/">Win2003Server的SYN Attack Protect陷阱</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - Zhou Hua -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

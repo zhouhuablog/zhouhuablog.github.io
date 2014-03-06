@@ -1,0 +1,262 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Restrict关键字 - Yet Another Coder</title>
+  <meta name="author" content="Zhou Hua">
+
+  
+  <meta name="description" content="看代码看到个restrict，头一次知道还有这么个关键字，在维基查到基本用法和解释。本着好记性不如烂笔头的原则，翻译这篇维基贴在这里。 在C语言的一个标准(C99)里，有一个用于修饰指针声明的关键字－restrict，它是程序员给编译器的一个意向声明，表明只有此指针或者基于此指针的某个值(比如 &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://zhouhuablog.github.io/blog/2010/03/19/keyword-restrict">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Yet Another Coder" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Yet Another Coder</a></h1>
+  
+    <h2>Do Not Panic!</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:zhouhuablog.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Restrict关键字</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2010-03-19T15:39:51+08:00" pubdate data-updated="true">Mar 19<span>th</span>, 2010</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>看代码看到个restrict，头一次知道还有这么个关键字，在<a href="http://en.wikipedia.org/wiki/Restrict">维基</a>查到基本用法和解释。本着好记性不如烂笔头的原则，翻译<a href="http://en.wikipedia.org/wiki/Restrict">这篇</a>维基贴在这里。</p>
+
+<p>在C语言的一个标准(C99)里，有一个用于修饰指针声明的关键字－<code>restrict</code>，它是程序员给编译器的一个意向声明，表明只有此指针或者基于此指针的某个值(比如 pointer+1)可以访问其指向的对象。这个关键字限制了指针别名(译注：即指向同一对象的不同指针)，目的在于进行编译器优化。如果这个程序员没有遵守这个意向声明，并且这个对象由一个独立指针访问到的话，会造成未定义的行为。( 译注：我也没搞懂这一大段话什么意思 ^_^ 不过看下面的例子应该差不多能理解这个关键字的用法)</p>
+
+<p>如果知道只有一个指针指向某个内存块的话，编译器就能进行优化，以生成更高效的代码。下面这个例子能清楚解释这一点。</p>
+
+<pre><code>void updatePtrs(size_t *ptrA, size_t *ptrB, size_t *val)
+{
+    *ptrA += *val;
+    *ptrB += *val;
+}
+</code></pre>
+
+<p>这段代码里面，指针<code>ptrA</code> , <code>ptrB</code>, <code>val</code>可能指向同一块内存，所以编译器不能对代码进行优化。</p>
+
+<pre><code>load R1 ← *val  ; 加载val指针的
+load R2 ← *ptrA ; 加载ptrA指针的值&amp;lt;/pre&amp;gt;
+add  R2 += R1   ; 相加
+set  R2 → *ptrA ; 更新ptrA指针的值
+; 对ptrB指针的操作类似，注意，这里val指针被加载两次，因为ptrA有可能和val指向同一块内存
+load R1 ← *val
+load R2 ← *ptrB
+add  R2 += R1
+set  R2 → *ptrB
+</code></pre>
+
+<p>如果使用restrict关键字，函数声明为：</p>
+
+<pre><code>void updatePtrs(size_t *restrict ptrA, size_t *restrict ptrB, size_t *restrict val);
+</code></pre>
+
+<p>编译器就能知道ptrA, ptrB, val三个指针指向不同的内存块，更新其中一个不会影响到其他的，从而对代码进行优化。当然，这里要由程序员保证这三个指针不指向同一块内存。</p>
+
+<pre><code>load R1 ← *val
+load R2 ← *ptrA
+add  R2 += R1
+set  R2 → *ptrA
+;编译器知道指针val的值没有改变，所以没有重新加载它，优化了汇编代码
+load R2 ← *ptrB
+add  R2 += R1
+set  R2 → *ptrB
+</code></pre>
+
+<p>还有一个例子是<code>memcpy</code>函数，<code>memcpy(void*, void*, nbytes)</code>的前两个指针参数被声明为<code>restrict</code>，告诉编译器两个数据块没有重叠，便于进行优化，使得<code>memcpy</code>的速度更快。如果程序员用相同的指针作为这两个参数的值，那么memcpy函数会产生未定义的行为。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">admin</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2010-03-19T15:39:51+08:00" pubdate data-updated="true">Mar 19<span>th</span>, 2010</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/mo-ren/'>默认</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://zhouhuablog.github.io/blog/2010/03/19/keyword-restrict/" data-via="" data-counturl="http://zhouhuablog.github.io/blog/2010/03/19/keyword-restrict/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2009/12/30/0912302121/" title="Previous Post: 【编程之美】数组循环移位">&laquo; 【编程之美】数组循环移位</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2010/06/09/cpp-exception-handling/" title="Next Post: C++ Exception Handling">C++ Exception Handling &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/04/initializer-of-array-and-class/">初始化:数组和类</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/buffer-overflow-and-no-stack-protector/">缓冲区溢出和-fno-stack-protector</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/11/07/pkg_resources-distributionnotfound/">pkg_resources.DistributionNotFound</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/05/09/buffering-of-standard-input-output/">标准输入／输出流的缓冲</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/02/17/trap-in-syn-attack-protect/">Win2003Server的SYN Attack Protect陷阱</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - Zhou Hua -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

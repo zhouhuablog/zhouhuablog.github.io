@@ -1,0 +1,318 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>初始化:数组和类 - Yet Another Coder</title>
+  <meta name="author" content="Zhou Hua">
+
+  
+  <meta name="description" content="前段时间有个项目，其中有一部分从磁盘读出数据的功能，我们用64块2M内存来保存读出的数据。测试的时候，发现读取速度非常之慢，与理想情况有1个数量级的差距。于是在查错调优的时候，发现了这个问题。 怎么了？ 2M内存在代码中用typedef一个数组来表示： const int SIZE_OF_MEM &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://zhouhuablog.github.io/blog/2013/03/04/initializer-of-array-and-class">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Yet Another Coder" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Yet Another Coder</a></h1>
+  
+    <h2>Do Not Panic!</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:zhouhuablog.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">初始化:数组和类</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-03-04T16:41:47+08:00" pubdate data-updated="true">Mar 4<span>th</span>, 2013</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>前段时间有个项目，其中有一部分从磁盘读出数据的功能，我们用64块2M内存来保存读出的数据。测试的时候，发现读取速度非常之慢，与理想情况有1个数量级的差距。于是在查错调优的时候，发现了这个问题。</p>
+
+<ul>
+<li><strong>怎么了？</strong></li>
+</ul>
+
+
+<p>2M内存在代码中用<code>typedef</code>一个数组来表示：</p>
+
+<pre><code>const int SIZE_OF_MEM = 2*1024*1024;
+typedef char Block[SIZE_OF_MEM];
+</code></pre>
+
+<p>简化读取逻辑，去掉其他细节之后，得到数据块使用部分的模拟代码：</p>
+
+<pre><code>const int n = 100;
+void *p[n];
+for (int i = 0; i &lt; n; ++i) { // 1
+    p[i] = new Block();
+}
+for (int i = 0; i &lt; 1000000 * n; ++i) { // 2
+    p[i%n] = new(p[i%n]) Block(); //取余以减少测试需要的内存数量
+}
+for (int i = 0; i &lt; n; ++i) {
+    delete p[i];
+}
+return 0;
+</code></pre>
+
+<p>经历数次错误的怀疑/验证，通过对整体逻辑的一步步计时，最后发现中间的第二个<code>for</code>循环里的逻辑就是症结所在。平均每一次的<code>new-placement</code>耗时在毫秒级（milliseconds），大大超出预期，导致读取模型工作效率低下。</p>
+
+<p>看起来数组<code>typedef</code>不灵光，猜测数组可能存在某些特性，导致<code>new-placement</code>运行效率远低于预期。换成类试试看:</p>
+
+<pre><code>const int SIZE_OF_MEM=2*1024*1024;
+class Block
+{
+public:
+    Block() {}
+private:
+    char data[SIZE_OF_MEM];
+};
+</code></pre>
+
+<p>再一次计时，1,000,000次的执行时间不到200ms，看起来正常多了。</p>
+
+<p>这张图对比了测试代码<code>new-placement</code>在<code>block</code>为array和class时的执行效率差异。其中，array由于耗时太久，只执行了1000次，而class执行1,000,000次。
+<img src="http://farm9.staticflickr.com/8235/8526560021_284be2ce3b.jpg" alt="Comparison of Array and Class" /></p>
+
+<p>为什么定义成类比<code>typedef</code>的数组快这么多？看看<code>new-placement</code>语句的汇编代码怎么说（均为VS2008编译）。
+<img src="http://farm9.staticflickr.com/8373/8526560091_79f3c12bdb_b.jpg" alt="VS2008 assembly of array and class" /></p>
+
+<p>汇编代码清楚的显示两种定义的不同。对于数组，在<code>new</code>操作完成后，有<code>memset</code>，而对于类，则有构造函数的调用。对于2M内存，数组类型在<code>new</code>完成后要被初始化为0，这就是低效率的罪魁祸首。</p>
+
+<p>再来看看Linux下gcc的汇编代码：
+<img src="http://farm9.staticflickr.com/8109/8527725118_75cf398054_b.jpg" alt="linux assembly of array and class" />
+GCC和VS2008编译结果一致，看起来应该不是编译器bug，:)</p>
+
+<ul>
+<li>为什么？</li>
+</ul>
+
+
+<p>找找C++标准，关于初始化的部分有这么一条：</p>
+
+<blockquote><p>An object whose initializer is an empty set of parentheses, i.e., (), shall be value-initialized.</p></blockquote>
+
+<p>什么是value-initialized？</p>
+
+<blockquote><p>To value-initialize an object of type T means:</p>
+
+<ul>
+<li><p>if T is a (possibly cv-qualified) class type (Clause 9) with a user-provided constructor (12.1), then the default constructor for T is called (and the initialization is ill-formed if T has no accessible default constructor);</p></li>
+<li><p>if T is a (possibly cv-qualified) non-union class type without a user-provided constructor, then the object is zero-initialized and, if T’s implicitly-declared default constructor is non-trivial, that constructor is called.</p></li>
+<li><p>if T is an array type, then each element is value-initialized;</p></li>
+<li><p>otherwise, the object is zero-initialized.</p></li>
+</ul>
+</blockquote>
+
+<p>这种空的小括号，()，一般情况下不能用来表示初始化某个对象。但是，在少数情况下，它是合法的，上面的<code>new</code>就属于这些少数情况里的一个。在这种情况下，要初始化的类型又是数组，于是不幸落入第三种情况，每个元素都被初始化为0。Linux下的汇编代码清楚的表明了这个过程：</p>
+
+<pre><code>0x000000000044187c cmpq   $0x0,-0x18(%rbp)
+0x0000000000441881 je     0x4418b9
+0x0000000000441883 mov    -0x18(%rbp),%rax
+0x0000000000441887 mov    %rax,%rsi
+0x000000000044188a mov    $0x200000,%edi
+0x000000000044188f callq  0x43d853 
+0x0000000000441894 mov    %rax,%rdx
+0x0000000000441897 test   %rdx,%rdx
+0x000000000044189a je     0x4418b9
+0x000000000044189c mov    $0x1fffff,%edx               //数组大小
+0x00000000004418a1 jmp    0x4418ae
+0x00000000004418a3 movb   $0x0,(%rax)               // 置0
+0x00000000004418a6 add    $0x1,%rax                   //移动指针
+0x00000000004418aa sub    $0x1,%rdx                   //数组大小减1
+0x00000000004418ae cmp    $0xffffffffffffffff,%rdx    //判断是否完成全部元素置0
+0x00000000004418b2 setne  %cl
+0x00000000004418b5 test   %cl,%cl
+0x00000000004418b7 jne    0x4418a3
+0x00000000004418b9 mov    -0x18(%rbp),%rax
+</code></pre>
+
+<p>不同的初始化方式编译得到的汇编代码差异很大，如果在<code>new-placement</code>之后不写()，结果又如何？不同的优化等级会有影响么？有兴趣的可以查查标准，再自己动手试试。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">admin</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2013-03-04T16:41:47+08:00" pubdate data-updated="true">Mar 4<span>th</span>, 2013</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/mo-ren/'>默认</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://zhouhuablog.github.io/blog/2013/03/04/initializer-of-array-and-class/" data-via="" data-counturl="http://zhouhuablog.github.io/blog/2013/03/04/initializer-of-array-and-class/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2013/01/09/buffer-overflow-and-no-stack-protector/" title="Previous Post: 缓冲区溢出和-fno-stack-protector">&laquo; 缓冲区溢出和-fno-stack-protector</a>
+      
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/04/initializer-of-array-and-class/">初始化:数组和类</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/buffer-overflow-and-no-stack-protector/">缓冲区溢出和-fno-stack-protector</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/11/07/pkg_resources-distributionnotfound/">pkg_resources.DistributionNotFound</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/05/09/buffering-of-standard-input-output/">标准输入／输出流的缓冲</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/02/17/trap-in-syn-attack-protect/">Win2003Server的SYN Attack Protect陷阱</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - Zhou Hua -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

@@ -1,0 +1,271 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>Win2003Server的SYN Attack Protect陷阱 - Yet Another Coder</title>
+  <meta name="author" content="Zhou Hua">
+
+  
+  <meta name="description" content="发现这个陷阱源于一个自己写的HTTP服务端。因为项目里要用到支持GET请求就能满足需要的HTTP服务端，图方便就用内部封的异步Socket类实现了这么个简单的服务端。没想到，就是这个简单的HTTP服务，还是出现了几次莫名其妙的问题。第一次出现在刚完成代码功能测试时， &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://zhouhuablog.github.io/blog/2011/02/17/trap-in-syn-attack-protect">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Yet Another Coder" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Yet Another Coder</a></h1>
+  
+    <h2>Do Not Panic!</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:zhouhuablog.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">Win2003Server的SYN Attack Protect陷阱</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2011-02-17T11:11:06+08:00" pubdate data-updated="true">Feb 17<span>th</span>, 2011</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>发现这个陷阱源于一个自己写的HTTP服务端。因为项目里要用到支持GET请求就能满足需要的HTTP服务端，图方便就用内部封的异步Socket类实现了这么个简单的服务端。没想到，就是这个简单的HTTP服务，还是出现了几次莫名其妙的问题。第一次出现在刚完成代码功能测试时，对HTTP的一知半解导致查了几天之后才发现原来是没处理HTTP头里的Keep-Alive。</p>
+
+<p>最近又碰见另一个百思不得其解铃还需系铃人人得而诛之的问题，测试服务端性能时，用Apache的AB压服务器，设置的并发数稍大就只能完成一部分请求，AB的提示是“远程主机主动关闭连接”。具体来说就是，当AB参数为请求数1000，并发数200的时候，服务端能够正常完成测试；增加并发数到300，则服务端只能完成1000个请求中的300多个，客户端抓包观察到大量请求在TCP三次握手完成后立刻被RST。</p>
+
+<p>用自己封装的异步Socket类写个测试客户端，循环连接服务端，产生大量连接，同样连接数也只能到300多个，其余的大量连接得到类型为WSAENETRESET的socket错误。</p>
+
+<p>用来实现HTTP服务端的异步Socket类没有什么特别操作。逻辑是这样的：</p>
+
+<ul>
+<li><p>服务端首先产生一个Socket句柄（废话&hellip;），转为异步模式后监听端口，等待客户端连接。</p></li>
+<li><p>一旦有客户端连接，服务端调用accept得到新的Socket，加入到一个Socket集合进行统一处理。</p></li>
+<li><p>每次统一处理时，查询所有Socket的事件，对不同的事件进行不同的处理。</p></li>
+<li><p>服务端对所有的Socket句柄不主动执行关闭操作，除非调用recv时得到的长度为0，即认为是客户端主动关闭，随后服务端进入被动关闭。</p></li>
+</ul>
+
+
+<p>应用开发出现问题的第一反应是检查自己的程序。首先怀疑是逻辑不严密，在某特殊情况下Reset客户端连接。在服务端每个可能关闭socket的地方增加日志，再用AB压一次观察输出。但服务端日志没有记录到任何异常的关闭操作，问题似乎不是服务端关闭连接导致的。</p>
+
+<p>既然没有异常关闭socket的情况，那应该是其他地方出问题。考虑listen函数的backlog参数，会不会是这里的原因呢？</p>
+
+<p>listen函数原型：</p>
+
+<pre><code>int listen( __in  SOCKET s,  __in  int backlog );
+</code></pre>
+
+<p>来看backlog参数在MSDN的说明</p>
+
+<blockquote><p>The maximum length of the queue of pending connections</p></blockquote>
+
+<p>再往下看，MSDN中对listen函数有一段这样的描述</p>
+
+<blockquote><p>If a connection request arrives and the queue is full, the client will receive an error with an indication of WSAECONNREFUSED.</p></blockquote>
+
+<p>就是说，如果客户端连接数过大，超过调用listen函数设置的backlog队列大小，新的连接会收到WSAECONNREFUSED的socket错误。但观察到的现象是客户端socket错误为WSAENETRESET，不符合文档的描述。</p>
+
+<p>过了listen函数再往下看，代码进入日志能够记录的范围。上面说过，服务端没有异常关闭的操作。到这里仍然没找到原因。目前为止，最有可能的情况就是瞬间的连接数过多导致backlog满。就算是这个原因，客户端收到的也应该是WSAECONNREFUSED错误而不是观察到的WSAENETRESET错误，绕进死胡同了。就这个问题在<a href="http://stackoverflow.com/">stackoverflow</a>发的询问帖，回复里也有人说可能是backlog满导致客户端无法连接，但却无法解释为什么收到的socket错误不是MSDN描述的WSAECONNREFUSED。</p>
+
+<p>问题就这样被搁置下来，直到三天后我忙完手头的事情，用部分关键词google，得到了某个错误现象匹配度很高的搜索结果。<a href="http://www.tech-archive.net/Archive/Development/microsoft.public.win32.programmer.networks/2005-10/msg00313.html">这里</a>是原帖，截取一段简单描述</p>
+
+<blockquote><p>We started getting problems when customers implemented SP1 on their Windows Server 2003
+boxes. We&rsquo;d see clients who thought they had successfully connected, but who would get a
+RESET back from the server immediately after the 3-way handshake (SYN, SYN-ACK, ACK). This
+seems <em>completely broken</em> to me.</p></blockquote>
+
+<p>啊哈，跟我们的问题看起来一样！他认为是Windows 2003 Server默认开启的<a href="http://technet.microsoft.com/en-us/library/cc781167(WS.10">SYN攻击保护</a>.aspx)开关在作怪，猜想可能是SYN攻击保护机制的实现影响到Winsock的accept函数行为。正常的行为是，当backlog队列满时，三次握手中第一个SYN包就会导致服务端响应RST+ACK拒绝客户端的连接。但SYN保护机制起作用后，这个行为变成直接接受新的连接再去检查backlog队列，当发现backlog队列满时丢弃此连接。服务端此时要干掉连接就只能在已完成三次握手的连接上发送一个RST，于是客户端出现莫名其妙的WSAENETRESET错误。</p>
+
+<p>这是他的问题以及猜测，能不能解决我们的问题，还要实验一下。打开注册表才发现，我们的服务器上没有他描述的HKLM\System\CurrentControlSet\Services\Tcpip\Parameters\SynAttackProtect这一项，没关系，没有我们可以创造一个，设置键值为0，重启机器（万恶的重启！）。此时再用AB去压服务端，在客户端果然抓到的RST+ACK包。用自己写的客户端测试，socket错误也由之前百思不得其解的WSAENETRESET变成WSAECONNREFUSED。</p>
+
+<p>问题原因到这里基本确认，由于我们的服务端实现在接受客户端连接时速度不够快，用AB压服务端时的大量连接填满backlog队列，这些连接同时也触发服务器默认开启的SYN攻击保护机制，操作系统认为受到SYN攻击，后续的其他连接于是被重置。关于这个问题，<a href="http://blogs.msdn.com/b/wndp/archive/2005/12/09/502256.aspx">这里</a>也有提及。这种跟文档描述不一致的行为害苦了广大程序员，在别人2005年就受过苦之后，2010年我这个倒霉蛋又再次遇上。不过奇怪的是，网上搜索不到多少关于这个问题的中文资料，英文倒是又不少人提过。</p>
+
+<p>之前在跟项目组同事的讨论原因时，也考虑过系统或者路由在应用程序之下断开连接的可能性，但是由于对操作系统环境不熟悉，不知道存在这么一个SynAttackProtect机制，影响到问题原因的确认，算是一个教训吧。虽然存在文档描述与实际行为不一致的原因，但对程序运行平台的熟悉程度还是直接影响了定位问题的速度。</p>
+
+<p>顺便说一句，测试中发现，Windows 2003 Server SP2里的backlog最大值似乎是200，不过没有查过官方文档确认，纯属推测。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">admin</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2011-02-17T11:11:06+08:00" pubdate data-updated="true">Feb 17<span>th</span>, 2011</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/mo-ren/'>默认</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://zhouhuablog.github.io/blog/2011/02/17/trap-in-syn-attack-protect/" data-via="" data-counturl="http://zhouhuablog.github.io/blog/2011/02/17/trap-in-syn-attack-protect/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2010/10/17/nagle-algorithm-and-lag-in-wow/" title="Previous Post: Nagle算法和魔兽世界的延迟">&laquo; Nagle算法和魔兽世界的延迟</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2011/05/09/buffering-of-standard-input-output/" title="Next Post: 标准输入／输出流的缓冲">标准输入／输出流的缓冲 &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/04/initializer-of-array-and-class/">初始化:数组和类</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/buffer-overflow-and-no-stack-protector/">缓冲区溢出和-fno-stack-protector</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/11/07/pkg_resources-distributionnotfound/">pkg_resources.DistributionNotFound</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/05/09/buffering-of-standard-input-output/">标准输入／输出流的缓冲</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/02/17/trap-in-syn-attack-protect/">Win2003Server的SYN Attack Protect陷阱</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - Zhou Hua -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

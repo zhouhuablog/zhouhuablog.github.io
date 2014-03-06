@@ -1,0 +1,318 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>标准输入／输出流的缓冲 - Yet Another Coder</title>
+  <meta name="author" content="Zhou Hua">
+
+  
+  <meta name="description" content="本文内容大部分内容来自《Advanced Programming in the UNIX Environment》第5章第4节 Buffering。 题目： 下面的代码输出结果是什么？ class A
+{ private: int m_value; public: A(int value) { &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://zhouhuablog.github.io/blog/2011/05/09/buffering-of-standard-input-output">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Yet Another Coder" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Yet Another Coder</a></h1>
+  
+    <h2>Do Not Panic!</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:zhouhuablog.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">标准输入／输出流的缓冲</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2011-05-09T22:30:39+08:00" pubdate data-updated="true">May 9<span>th</span>, 2011</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>本文内容大部分内容来自《<a href="http://book.douban.com/subject/1788421/">Advanced Programming in the UNIX Environment</a>》第5章第4节 Buffering。</p>
+
+<p>题目：</p>
+
+<blockquote><p>下面的代码输出结果是什么？</p>
+
+<pre><code>class A
+{
+    private:
+        int m_value;
+    public:
+        A(int value)
+        {
+            m_value = value;
+        }
+        void Print1()
+        {
+            printf("hello world");
+        }
+        void Print2()
+        {
+            printf("%d", m_value);
+        }
+};
+
+int main(void)
+{
+    A* pA = NULL;
+    pA-&gt;Print1();
+    pA-&gt;Print2();
+
+    return 0;
+}
+</code></pre></blockquote>
+
+<p>显然应该是，能正常执行<code>Print1()</code>而不能执行<code>Print2()</code>，也就是说，在程序崩溃之前至少应该能输出<code>“hello world”</code>。原因看<a href="http://blog.developnotes.info/2009/12/22/0912222006/">这里</a></p>
+
+<p>等一等，你可能会拷贝下来去编译执行一次，如果跟我一样在Mac下的话，你可能会发现不对劲的地方－为什么看不到<code>Print1()</code>的输出呢？为了确认答案，拷贝题目代码执行的结果中没有Print1()的输出，直接看到<code>Print2()</code>引用非法地址导致的错误：</p>
+
+<pre><code>Segmentation fault
+</code></pre>
+
+<p>那这是什么原因呢？</p>
+
+<p><code>printf</code>函数定义：</p>
+
+<pre><code>int  printf(const char * __restrict, ...)
+</code></pre>
+
+<p>它属于标准I/O库，标准I/O库提供了对输入输出的缓存以达到调用read和write次数最少的目的。嗯哼，“缓冲”是关键词，猜测Print1()的输出应该是被缓冲了吧。可具体是怎么缓冲的呢？</p>
+
+<p>标准I/O库通过提供缓冲区，减少对于无缓冲的read和write方法的调用，增加效率。另一方面，缓冲区的存在也使得应用程序不用自己考虑最佳的读写块大小。不过，如上所见，缓冲区既是标准I/O库的便利之处，同时也是容易引起混乱的地方。标准I/O库提供三种缓冲方式：</p>
+
+<ol>
+<li><p> 完全缓冲，此种情形下，所有的I/O操作都在缓冲区被填满后才真正的发生；</p></li>
+<li><p> 行缓冲，只有当碰到换行符时才发生真正的I/O操作；</p></li>
+<li><p> 无缓冲，顾名思义，标准I/O库对I/O操作不做缓存。</p></li>
+</ol>
+
+
+<p>ISO C对standard input、standard output以及standard error有以下规定：</p>
+
+<ul>
+<li><p>当且仅当不指向交互设备时，standard input和standard output是完全缓冲的</p></li>
+<li><p>Standard error不允许完全缓冲</p></li>
+</ul>
+
+
+<p>这个模糊不清的标准根本没说实现的时候具体应该怎么做，当standard input指向交互设备时，它应该无缓冲还是行缓冲？Standard error不允许完全缓冲，那么实现的时候采用行缓冲还是无缓冲呢？大多数的实现遵循以下原则：</p>
+
+<ul>
+<li><p>Standard error总是实现为无缓冲流；</p></li>
+<li><p>除了standard error之外的其他流，倘若指向终端设备，则采取行缓冲。否则全部采用完全缓冲；</p></li>
+</ul>
+
+
+<p>对默认的缓冲方式不满意的话，可以通过</p>
+
+<pre><code>void setbuf(FILE * __restrict, char * __restrict);
+int  setvbuf(FILE * __restrict, char * __restrict, int, size_t);
+</code></pre>
+
+<p>两个函数更改缓冲区大小以及类型。</p>
+
+<p>好了，既然知道内幕，现在修改main函数，把缓冲区设置成空试试</p>
+
+<pre><code>int main(void)
+{
+    setbuf(stdout, NULL);
+
+    A* pA = NULL;
+    pA-&gt;Print1();
+    pA-&gt;Print2();
+
+    return 0;
+}
+</code></pre>
+
+<p>再执行，这次<code>Print1()</code>的输出能够正常显示。</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">admin</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2011-05-09T22:30:39+08:00" pubdate data-updated="true">May 9<span>th</span>, 2011</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/mo-ren/'>默认</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://zhouhuablog.github.io/blog/2011/05/09/buffering-of-standard-input-output/" data-via="" data-counturl="http://zhouhuablog.github.io/blog/2011/05/09/buffering-of-standard-input-output/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2011/02/17/trap-in-syn-attack-protect/" title="Previous Post: Win2003Server的SYN Attack Protect陷阱">&laquo; Win2003Server的SYN Attack Protect陷阱</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2012/11/07/pkg_resources-distributionnotfound/" title="Next Post: pkg_resources.DistributionNotFound">pkg_resources.DistributionNotFound &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/04/initializer-of-array-and-class/">初始化:数组和类</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/buffer-overflow-and-no-stack-protector/">缓冲区溢出和-fno-stack-protector</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/11/07/pkg_resources-distributionnotfound/">pkg_resources.DistributionNotFound</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/05/09/buffering-of-standard-input-output/">标准输入／输出流的缓冲</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/02/17/trap-in-syn-attack-protect/">Win2003Server的SYN Attack Protect陷阱</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - Zhou Hua -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>

@@ -1,0 +1,4 @@
+User-agent: *
+Disallow: 
+
+Sitemap: http://zhouhuablog.github.io/sitemap.xml 

@@ -1,0 +1,276 @@
+
+<!DOCTYPE html>
+<!--[if IEMobile 7 ]><html class="no-js iem7"><![endif]-->
+<!--[if lt IE 9]><html class="no-js lte-ie8"><![endif]-->
+<!--[if (gt IE 8)|(gt IEMobile 7)|!(IEMobile)|!(IE)]><!--><html class="no-js" lang="en"><!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  <title>C++ Exception Handling - Yet Another Coder</title>
+  <meta name="author" content="Zhou Hua">
+
+  
+  <meta name="description" content="最近刚刚读完《深度探索C++对象模型》，说来惭愧，整本书都快看完才想起来要做笔记。目前笔记只有后面三章的一些重点内容，本文是异常处理(Exception Handling)这部分内容的笔记整理。 写程序的时候，对于可能出现异常的地方，通常来说我们是这样写的： try{
+...
+throw &hellip;">
+  
+
+  <!-- http://t.co/dKP3o1e -->
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  
+  <link rel="canonical" href="http://zhouhuablog.github.io/blog/2010/06/09/cpp-exception-handling">
+  <link href="/favicon.png" rel="icon">
+  <link href="/stylesheets/screen.css" media="screen, projection" rel="stylesheet" type="text/css">
+  <link href="/atom.xml" rel="alternate" title="Yet Another Coder" type="application/atom+xml">
+  <script src="/javascripts/modernizr-2.0.js"></script>
+  <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+  <script>!window.jQuery && document.write(unescape('%3Cscript src="./javascripts/libs/jquery.min.js"%3E%3C/script%3E'))</script>
+  <script src="/javascripts/octopress.js" type="text/javascript"></script>
+  <!--Fonts from Google"s Web font directory at http://google.com/webfonts -->
+<link href="http://fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+<link href="http://fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+
+  
+
+</head>
+
+<body   >
+  <header role="banner"><hgroup>
+  <h1><a href="/">Yet Another Coder</a></h1>
+  
+    <h2>Do Not Panic!</h2>
+  
+</hgroup>
+
+</header>
+  <nav role="navigation"><ul class="subscription" data-subscription="rss">
+  <li><a href="/atom.xml" rel="subscribe-rss" title="subscribe via RSS">RSS</a></li>
+  
+</ul>
+  
+<form action="http://google.com/search" method="get">
+  <fieldset role="search">
+    <input type="hidden" name="q" value="site:zhouhuablog.github.io" />
+    <input class="search" type="text" name="q" results="0" placeholder="Search"/>
+  </fieldset>
+</form>
+  
+<ul class="main-navigation">
+  <li><a href="/">Blog</a></li>
+  <li><a href="/blog/archives">Archives</a></li>
+</ul>
+
+</nav>
+  <div id="main">
+    <div id="content">
+      <div>
+<article class="hentry" role="article">
+  
+  <header>
+    
+      <h1 class="entry-title">C++ Exception Handling</h1>
+    
+    
+      <p class="meta">
+        
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2010-06-09T20:59:07+08:00" pubdate data-updated="true">Jun 9<span>th</span>, 2010</time>
+        
+      </p>
+    
+  </header>
+
+
+<div class="entry-content"><p>最近刚刚读完《深度探索C++对象模型》，说来惭愧，整本书都快看完才想起来要做笔记。目前笔记只有后面三章的一些重点内容，本文是异常处理(Exception Handling)这部分内容的笔记整理。</p>
+
+<p>写程序的时候，对于可能出现异常的地方，通常来说我们是这样写的：</p>
+
+<pre><code>try{
+...
+throw ...
+} catch(...) {
+//exception handling
+}
+</code></pre>
+
+<p>当异常发生时，代码跳转到catch块，完成异常处理后退出。为了支持这个处理流程，编译器要能够在发生异常时，找到对应的catch子句。而查找catch子句时，编译器要知道函数的当前作用范围，同时还要了解抛出异常的类型，以便进行catch子句匹配(这引出了执行期类型识别的需求，即RTTI)。</p>
+
+<p>详细来看看，上面这段代码大致可以分为三个部分：</p>
+
+<ul>
+<li><p><code>throw</code>子句，它抛出一个<code>exception</code>，可以是内置类型，也可以是用户自定义类型</p></li>
+<li><p><code>catch</code>子句，每个<code>catch</code>子句都是一个<code>exception handler</code>，表示其之后的代码段用来处理某种类型的exception</p></li>
+<li><p><code>try</code>段，内含一些程序代码，这些代码可能引发<code>catch</code>子句生效</p></li>
+</ul>
+
+
+<p>当一个<code>exception</code>被抛出时，程序控制权从函数中释放，转而寻找一个匹配的<code>catch</code>子句。若不存在匹配的<code>catch</code>，默认的<code>terminate()</code>方法将被调用。而在控制权被放弃后，堆栈中的函数被poped up，函数内局部对象的析构函数在poped up之前会被调用。</p>
+
+<p>当exception发生，编译系统完成下面几件必须要做的事：</p>
+
+<p>1、检查发生<code>throw exception</code>操作的函数</p>
+
+<p>2、决定<code>throw</code>是否是发生在一个try段内</p>
+
+<p>3、如果throw发生在try段内，编译系统开始比较发生的exception的类型和catch子句中exception的类型是否吻合</p>
+
+<p>4、一旦exception类型吻合，该catch子句就得到流程控制权</p>
+
+<p>5、若throw并不是发生在try段内，或者没有找到吻合的catch子句，系统要做的就是，清理当前函数范围内所有局部对象，从堆栈中pop up当前函数，进入堆栈内下一个函数，继续步骤2-5</p>
+
+<p>那么当一个exception被抛出后，它经历了些什么？它并没有无家可归，睡在天桥底下。抛出的exception object放在exception数据堆栈中，从throw处传递到catch子句的是这个exception object的地址。来看个例子：</p>
+
+<pre><code>catch (BaseException  newobj) {
+    //do something
+    throw ;
+}
+</code></pre>
+
+<p>假设这个catch子句将收到一个<code>DerivedException</code>类型的exception object，<code>DerivedException</code>继承自<code>BaseException</code>。那么，由于exception类型吻合，按照上面说的步骤4，这个catch子句得到控制权。</p>
+
+<p>catch子句中的newobj在收到exception时，将以抛出的exception object作为初值，像函数以传值方式传递参数一样。由于newobj是一个对象而不是指针或引用，BaseException的copy constructor将会被调用(如果存在的话)，以拷贝原始exception object中属于BaseException的部分到当前的newobj中。</p>
+
+<p>完成这些之后，catch子句内的代码被执行，再次抛出异常。这次抛出的是newobj还是原始的exception object？抛出的仍然是原始的exception object。newobj只是局部对象，在catch子句结束后被摧毁，任何对newobj的修改都被丢弃而不会影响到原始的exception object。这个原始的exception object将直到有一个catch子句执行完，并且不再抛出exception后，才会被摧毁。</p>
+
+<p>本文内容来自《深度探索C++对象模型》第7章中的异常处理介绍。</p>
+
+<p>关于C++的EH，在codeproject上有篇<a href="http://www.codeproject.com/KB/cpp/Win32Exceptions.aspx">文章</a>简单介绍编译系统与win32系统之间的协作关系。</p>
+
+<p>that&rsquo;s all, over！</p>
+</div>
+
+
+  <footer>
+    <p class="meta">
+      
+  
+
+<span class="byline author vcard">Posted by <span class="fn">admin</span></span>
+
+      
+
+
+
+
+
+
+
+
+  
+
+
+<time datetime="2010-06-09T20:59:07+08:00" pubdate data-updated="true">Jun 9<span>th</span>, 2010</time>
+      
+
+<span class="categories">
+  
+    <a class='category' href='/blog/categories/mo-ren/'>默认</a>
+  
+</span>
+
+
+    </p>
+    
+      <div class="sharing">
+  
+  <a href="//twitter.com/share" class="twitter-share-button" data-url="http://zhouhuablog.github.io/blog/2010/06/09/cpp-exception-handling/" data-via="" data-counturl="http://zhouhuablog.github.io/blog/2010/06/09/cpp-exception-handling/" >Tweet</a>
+  
+  
+  
+</div>
+
+    
+    <p class="meta">
+      
+        <a class="basic-alignment left" href="/blog/2010/03/19/keyword-restrict/" title="Previous Post: restrict关键字">&laquo; restrict关键字</a>
+      
+      
+        <a class="basic-alignment right" href="/blog/2010/10/17/nagle-algorithm-and-lag-in-wow/" title="Next Post: Nagle算法和魔兽世界的延迟">Nagle算法和魔兽世界的延迟 &raquo;</a>
+      
+    </p>
+  </footer>
+</article>
+
+</div>
+
+<aside class="sidebar">
+  
+    <section>
+  <h1>Recent Posts</h1>
+  <ul id="recent_posts">
+    
+      <li class="post">
+        <a href="/blog/2013/03/04/initializer-of-array-and-class/">初始化:数组和类</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2013/01/09/buffer-overflow-and-no-stack-protector/">缓冲区溢出和-fno-stack-protector</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2012/11/07/pkg_resources-distributionnotfound/">pkg_resources.DistributionNotFound</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/05/09/buffering-of-standard-input-output/">标准输入／输出流的缓冲</a>
+      </li>
+    
+      <li class="post">
+        <a href="/blog/2011/02/17/trap-in-syn-attack-protect/">Win2003Server的SYN Attack Protect陷阱</a>
+      </li>
+    
+  </ul>
+</section>
+
+
+
+
+
+  
+</aside>
+
+
+    </div>
+  </div>
+  <footer role="contentinfo"><p>
+  Copyright &copy; 2014 - Zhou Hua -
+  <span class="credit">Powered by <a href="http://octopress.org">Octopress</a></span>
+</p>
+
+</footer>
+  
+
+
+
+
+
+
+
+  <script type="text/javascript">
+    (function(){
+      var twitterWidgets = document.createElement('script');
+      twitterWidgets.type = 'text/javascript';
+      twitterWidgets.async = true;
+      twitterWidgets.src = '//platform.twitter.com/widgets.js';
+      document.getElementsByTagName('head')[0].appendChild(twitterWidgets);
+    })();
+  </script>
+
+
+
+
+
+</body>
+</html>
